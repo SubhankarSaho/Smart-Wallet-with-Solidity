@@ -1,0 +1,72 @@
+// SPDX-License-Identifier: MIT
+
+pragma solidity ^0.8.16;
+
+contract consumer{
+
+    function GetBalance() public view returns(uint) {
+    return address(this).balance ;
+    }
+    function deposit() public payable {}
+}
+
+contract SmartContractWallet{
+    address payable public owner;
+    address payable next_owner;
+    mapping (address => uint) public allowence;
+    mapping (address=> bool) public isallowedtosend;
+    uint guardiansCount;
+    mapping (address=>bool) public guardian;
+    mapping (address=> mapping (address=>bool)) public nextGuardianVotedBool;
+
+    constructor(){
+        owner= payable (msg.sender);
+
+    }
+
+    function setAllowence(address _for, uint _amount) public {
+        require( owner == msg.sender,"you are not the owner Hence not allowed to set this, Aborting !!");
+        allowence[_for]=_amount;
+
+        if (_amount>0){
+            isallowedtosend[_for]= true;
+        }else {
+            isallowedtosend[_for]= false;
+        }
+
+    }
+    function setGuardian(address _guard, bool Guardbool) public {
+        require(owner== msg.sender,"you are not the owner, Aborting!!");
+        guardian[_guard]= Guardbool;
+
+    }
+
+    function NewOwnerProposal(address payable new_owner) public {
+        require(guardian[msg.sender],"You are not a guardian!!");
+        require(nextGuardianVotedBool[new_owner][msg.sender]== false,"You have already voted, Aborting!!");
+        if (next_owner != new_owner){
+            next_owner= new_owner;
+            guardiansCount=0;
+        } 
+        guardiansCount++;
+        if (guardiansCount>= 3){
+            owner= next_owner;
+            next_owner= payable(address(0));
+        }
+    }
+    function Transfer(address payable _to, uint _amount, bytes memory _payload) public returns(bytes memory) {
+
+        // require(owner==msg.sender, "you are not the owner,Aborting!!");
+        if(msg.sender != owner){
+            require(isallowedtosend[msg.sender],"you cant");
+            require(allowence[msg.sender]>=_amount, "you do not have sufficient funds for this amount of transaction, aborting!!");
+            allowence[msg.sender] -= _amount ;
+        }
+
+        (bool success,bytes memory returnData) = _to.call{value: _amount}(_payload);
+        require(success,"Transfer failed");
+        return returnData;
+    }
+
+    receive() external payable {}
+}
